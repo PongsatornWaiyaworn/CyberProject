@@ -18,11 +18,11 @@ _SYSTEM = platform.system().lower()
 
 
 class WiFiScanner:
-    def __init__(self, iface: Optional[str] = None, demo: bool = False):
+    def __init__(self, iface: Optional[str] = None, demo: bool = False, stop_event: Optional[threading.Event] = None):
         self.iface = iface
         self.demo = demo
         self.results: Dict[str, Dict[str, Any]] = {}
-        self._stop = threading.Event()
+        self._stop = stop_event if stop_event is not None else threading.Event()
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -49,7 +49,11 @@ class WiFiScanner:
     # ------------------------------------------------------------------
     def _demo_scan(self, duration: int) -> Dict[str, Dict[str, Any]]:
         print(f"[*] DEMO MODE: Generating mock Wi-Fi data...")
-        time.sleep(min(duration, 2))
+        # Sleep with periodic stop checks
+        end_time = time.time() + min(duration, 2)
+        while time.time() < end_time and not self._stop.is_set():
+            time.sleep(0.1)
+        
         mock = [
             # Evil Twin: same SSID, different BSSID + encryption mismatch
             {"bssid": "00:11:22:33:44:55", "ssid": "Starbucks_WiFi", "rssi": -45, "channel": 6, "encryption": "WPA2/WPA3"},
@@ -175,7 +179,9 @@ class WiFiScanner:
         print(f"[*] Starting Windows scan via netsh for {duration}s...")
         seen = set()
         end = time.time() + duration
-        while time.time() < end:
+        scan_success = False
+        
+        while time.time() < end and not self._stop.is_set():
             try:
                 out = subprocess.check_output(
                     ["netsh", "wlan", "show", "networks", "mode=Bssid"],
@@ -185,18 +191,25 @@ class WiFiScanner:
                     errors="ignore",
                 )
                 self._parse_netsh(out, seen)
+                scan_success = True
             except subprocess.CalledProcessError as e:
                 print(f"[!] netsh error: {e.output.strip()}")
                 break
             except Exception as e:
                 print(f"[!] Windows scan error: {e}")
                 break
-            time.sleep(3)
+            
+            # Sleep in small increments to check stop event frequently
+            sleep_end = time.time() + 3
+            while time.time() < sleep_end and not self._stop.is_set():
+                time.sleep(0.1)
+        
         print(f"[*] Windows scan complete. Found {len(self.results)} unique APs.")
         return self.results
 
     def _parse_netsh(self, output: str, seen: set):
         current_ssid = ""
+        bssid = None
         for line in output.splitlines():
             line = line.strip()
             if line.startswith("SSID"):
@@ -215,25 +228,26 @@ class WiFiScanner:
                         "encryption": "OPN",
                         "count": 1,
                     }
-            elif "Signal" in line and bssid in self.results:
-                sm = re.search(r"(\d+)\s*%", line)
-                if sm:
-                    pct = int(sm.group(1))
-                    self.results[bssid]["rssi"] = -100 + int(pct * 0.7)
-            elif "Channel" in line and bssid in self.results:
-                cm = re.search(r"(\d+)", line)
-                if cm:
-                    self.results[bssid]["channel"] = int(cm.group(1))
-            elif "Authentication" in line and bssid in self.results:
-                val = line.upper()
-                if "WPA3" in val or "WPA2" in val:
-                    self.results[bssid]["encryption"] = "WPA2/WPA3"
-                elif "WPA" in val:
-                    self.results[bssid]["encryption"] = "WPA"
-                elif "WEP" in val:
-                    self.results[bssid]["encryption"] = "WEP"
-                else:
-                    self.results[bssid]["encryption"] = "OPN"
+            elif bssid is not None:
+                if "Signal" in line:
+                    sm = re.search(r"(\d+)\s*%", line)
+                    if sm:
+                        pct = int(sm.group(1))
+                        self.results[bssid]["rssi"] = -100 + int(pct * 0.7)
+                elif "Channel" in line:
+                    cm = re.search(r"(\d+)", line)
+                    if cm:
+                        self.results[bssid]["channel"] = int(cm.group(1))
+                elif "Authentication" in line:
+                    val = line.upper()
+                    if "WPA3" in val or "WPA2" in val:
+                        self.results[bssid]["encryption"] = "WPA2/WPA3"
+                    elif "WPA" in val:
+                        self.results[bssid]["encryption"] = "WPA"
+                    elif "WEP" in val:
+                        self.results[bssid]["encryption"] = "WEP"
+                    else:
+                        self.results[bssid]["encryption"] = "OPN"
 
     # ------------------------------------------------------------------
     # macOS — airport utility (no monitor mode needed)
@@ -241,7 +255,7 @@ class WiFiScanner:
     def _macos_scan(self, duration: int) -> Dict[str, Dict[str, Any]]:
         print(f"[*] Starting macOS scan for {duration}s...")
         end = time.time() + duration
-        while time.time() < end:
+        while time.time() < end and not self._stop.is_set():
             try:
                 airport = (
                     "/System/Library/PrivateFrameworks/Apple80211.framework/"
@@ -257,7 +271,12 @@ class WiFiScanner:
             except Exception as e:
                 print(f"[!] macOS scan error: {e}")
                 break
-            time.sleep(5)
+            
+            # Sleep in small increments to check stop event frequently
+            sleep_end = time.time() + 5
+            while time.time() < sleep_end and not self._stop.is_set():
+                time.sleep(0.1)
+        
         print(f"[*] macOS scan complete. Found {len(self.results)} unique APs.")
         return self.results
 

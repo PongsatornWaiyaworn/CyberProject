@@ -43,6 +43,7 @@ COLOR_SUSPICIOUS = "yellow"
 COLOR_HIGH = "red"
 COLOR_INFO = "cyan"
 COLOR_WARN = "orange_red1"
+COLOR_HIGH_RISK = "red"
 
 # Team information
 TEAM_MEMBERS = [

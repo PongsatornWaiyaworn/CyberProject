@@ -139,8 +139,16 @@ class WiFiAnalyzerGUI:
 
     def _scan_worker(self, iface, demo, duration):
         try:
-            scanner = WiFiScanner(iface=iface, demo=demo)
+            scanner = WiFiScanner(iface=iface, demo=demo, stop_event=self.stop_event)
             aps = scanner.scan(duration=duration)
+            
+            # If real scan found nothing and not in demo mode, try demo mode as fallback
+            if not demo and not aps:
+                print("[*] Real scan returned no results. Trying demo mode as fallback...")
+                self.status_var.set("No networks found. Using demo data...")
+                scanner_demo = WiFiScanner(iface=None, demo=True, stop_event=self.stop_event)
+                aps = scanner_demo.scan(duration=min(duration, 5))
+            
             analyzer = APAnalyzer(aps)
             report = analyzer.analyze()
             self.result_queue.put(("done", report))
@@ -166,9 +174,11 @@ class WiFiAnalyzerGUI:
         self.status_var.set(status)
 
     def _display_results(self, report):
-        for row in report:
-            score = row["risk_score"]
-            level = row["risk_level"]
+        aps = report.get("aps", [])
+        
+        for row in aps:
+            score = row["score"]
+            level = row["level"]
             tags = ()
             if score >= RISK_HIGH:
                 tags = ("high",)
@@ -189,19 +199,21 @@ class WiFiAnalyzerGUI:
                     row.get("encryption", ""),
                     score,
                     level,
-                    row.get("flags", ""),
+                    "; ".join(row.get("reasons", [])) if row.get("reasons") else "-",
                 ),
                 tags=tags,
             )
 
-        self.tree.tag_configure("high", background="#ffb3b3")
-        self.tree.tag_configure("suspicious", background="#ffffb3")
-        self.tree.tag_configure("safe", background="#b3ffb3")
+        # Configure tag colors
+        self.tree.tag_configure("high", background="#ff4444", foreground="white")
+        self.tree.tag_configure("suspicious", background="#ffcc00", foreground="black")
+        self.tree.tag_configure("safe", background="#44dd44", foreground="black")
 
-        total = len(report)
-        high = sum(1 for r in report if r["risk_score"] >= RISK_HIGH)
-        susp = sum(1 for r in report if RISK_SUSPICIOUS <= r["risk_score"] < RISK_HIGH)
-        safe = sum(1 for r in report if r["risk_score"] < RISK_SUSPICIOUS)
+        # Update summary
+        total = report.get("total", len(aps))
+        high = sum(1 for r in aps if r["score"] >= RISK_HIGH)
+        susp = sum(1 for r in aps if RISK_SUSPICIOUS <= r["score"] < RISK_HIGH)
+        safe = sum(1 for r in aps if r["score"] < RISK_SUSPICIOUS)
         self.summary_var.set(f"Summary: {high} High Risk | {susp} Suspicious | {safe} Safe | Total {total}")
 
 
