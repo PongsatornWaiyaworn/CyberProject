@@ -4,220 +4,217 @@ from tkinter import ttk
 import threading
 import queue
 import platform
+import subprocess
+import re
 
 from .scanner import WiFiScanner
 from .analyzer import APAnalyzer
-from .config import (
-    RISK_HIGH,
-    RISK_SUSPICIOUS,
-    RISK_SAFE,
-    COLOR_HIGH_RISK,
-    COLOR_SUSPICIOUS,
-    COLOR_SAFE,
-    DEFAULT_SCAN_DURATION,
-)
+from .config import DEFAULT_SCAN_DURATION
 
 
 class WiFiAnalyzerGUI:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("Fake Wi-Fi Risk Analyzer (Evil Twin Detector)")
-        self.root.geometry("1100x650")
-        self.root.minsize(900, 500)
+        self.root.geometry("1100x700")
 
         self._style()
         self._build_ui()
 
-        self.scan_thread: threading.Thread | None = None
+        self.scan_thread = None
         self.stop_event = threading.Event()
-        self.result_queue: queue.Queue = queue.Queue()
+        self.result_queue = queue.Queue()
         self.root.after(100, self._poll_queue)
 
     def _style(self):
         style = ttk.Style()
-        if platform.system() == "Windows":
-            style.theme_use("vista")
-        elif platform.system() == "Darwin":
-            style.theme_use("clam")
-        else:
-            style.theme_use("clam")
-
-        style.configure("HighRisk.Treeview", background="#ffcccc")
-        style.configure("Suspicious.Treeview", background="#ffffcc")
-        style.configure("Safe.Treeview", background="#ccffcc")
+        style.theme_use("vista" if platform.system() == "Windows" else "clam")
 
     def _build_ui(self):
-        # ---- Top control frame ----
         ctrl = ttk.Frame(self.root, padding=10)
         ctrl.pack(fill=tk.X)
 
-        ttk.Label(ctrl, text="Interface:").grid(row=0, column=0, sticky=tk.W, padx=(0, 5))
-        self.iface_var = tk.StringVar()
-        ttk.Entry(ctrl, textvariable=self.iface_var, width=15).grid(row=0, column=1, sticky=tk.W, padx=(0, 15))
-
-        ttk.Label(ctrl, text="Duration (s):").grid(row=0, column=2, sticky=tk.W, padx=(0, 5))
+        ttk.Label(ctrl, text="Duration (s):").grid(row=0, column=0)
         self.duration_var = tk.StringVar(value=str(DEFAULT_SCAN_DURATION))
-        ttk.Entry(ctrl, textvariable=self.duration_var, width=6).grid(row=0, column=3, sticky=tk.W, padx=(0, 15))
+        ttk.Entry(ctrl, textvariable=self.duration_var, width=6).grid(row=0, column=1)
 
         self.demo_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(ctrl, text="Demo mode (no Wi-Fi needed)", variable=self.demo_var).grid(row=0, column=4, sticky=tk.W, padx=(0, 15))
+        ttk.Checkbutton(ctrl, text="Demo mode", variable=self.demo_var).grid(row=0, column=2)
 
-        self.btn_scan = ttk.Button(ctrl, text="Start Scan", command=self._start_scan)
-        self.btn_scan.grid(row=0, column=5, sticky=tk.W, padx=(0, 5))
-
+        ttk.Button(ctrl, text="Start Scan", command=self._start_scan).grid(row=0, column=3)
         self.btn_stop = ttk.Button(ctrl, text="Stop", command=self._stop_scan, state=tk.DISABLED)
-        self.btn_stop.grid(row=0, column=6, sticky=tk.W)
+        self.btn_stop.grid(row=0, column=4)
 
-        # ---- Progress bar ----
         self.progress = ttk.Progressbar(self.root, mode="indeterminate")
-        self.progress.pack(fill=tk.X, padx=10, pady=(0, 5))
+        self.progress.pack(fill=tk.X, padx=10)
 
         self.status_var = tk.StringVar(value="Ready")
-        ttk.Label(self.root, textvariable=self.status_var, font=("Segoe UI", 9, "italic")).pack(anchor=tk.W, padx=10)
+        ttk.Label(self.root, textvariable=self.status_var).pack(anchor=tk.W, padx=10)
 
-        # ---- Treeview ----
+        # ===== TABLE =====
         cols = ("ssid", "bssid", "vendor", "channel", "rssi", "encryption", "score", "level", "flags")
-        self.tree = ttk.Treeview(
-            self.root,
-            columns=cols,
-            show="headings",
-            selectmode="browse",
-        )
+        self.tree = ttk.Treeview(self.root, columns=cols, show="headings")
         self.tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
 
-        headings = {
-            "ssid": "SSID",
-            "bssid": "BSSID",
-            "vendor": "Vendor",
-            "channel": "Ch",
-            "rssi": "RSSI",
-            "encryption": "Encryption",
-            "score": "Score",
-            "level": "Risk Level",
-            "flags": "Flags",
-        }
-        widths = {"ssid": 180, "bssid": 140, "vendor": 120, "channel": 40, "rssi": 70, "encryption": 100, "score": 50, "level": 90, "flags": 300}
-        for c in cols:
-            self.tree.heading(c, text=headings.get(c, c))
-            self.tree.column(c, width=widths.get(c, 80), anchor=tk.CENTER if c in ("channel", "rssi", "score", "level") else tk.W)
+        headings = ["SSID", "BSSID", "Vendor", "Ch", "RSSI", "Encryption", "Score", "Risk", "Flags"]
 
-        vsb = ttk.Scrollbar(self.tree, orient="vertical", command=self.tree.yview)
-        vsb.pack(side=tk.RIGHT, fill=tk.Y)
-        self.tree.configure(yscrollcommand=vsb.set)
+        for i, c in enumerate(cols):
+            self.tree.heading(c, text=headings[i])
 
-        # ---- Summary bar ----
+            if c == "flags":
+                self.tree.column(c, width=250)
+            elif c == "ssid":
+                self.tree.column(c, width=150)
+            elif c == "bssid":
+                self.tree.column(c, width=130)
+            else:
+                self.tree.column(c, width=80, anchor=tk.CENTER)
+
+        # ===== DETAIL PANEL (แสดง Flags เต็ม) =====
+        ttk.Label(self.root, text="Details (Full Flags):", font=("Segoe UI", 10, "bold"))\
+            .pack(anchor=tk.W, padx=10)
+
+        self.detail = tk.Text(self.root, height=6, wrap="word")
+        self.detail.pack(fill=tk.X, padx=10, pady=(0, 10))
+
+        # bind click
+        self.tree.bind("<<TreeviewSelect>>", self._on_select)
+
+        # summary
         self.summary_var = tk.StringVar(value="Summary: 0 APs")
-        ttk.Label(self.root, textvariable=self.summary_var, font=("Segoe UI", 10, "bold")).pack(anchor=tk.W, padx=10, pady=(5, 10))
+        ttk.Label(self.root, textvariable=self.summary_var).pack(anchor=tk.W, padx=10)
 
-    def _start_scan(self):
+    # ===== INTERFACES =====
+    def _get_interfaces(self):
+        system = platform.system()
         try:
-            duration = int(self.duration_var.get())
-        except ValueError:
-            duration = DEFAULT_SCAN_DURATION
+            if system == "Windows":
+                out = subprocess.check_output("netsh wlan show interfaces", shell=True, encoding="utf-8")
+                return re.findall(r"Name\s*:\s*(.+)", out)
+            elif system == "Linux":
+                out = subprocess.check_output("iw dev", shell=True, encoding="utf-8")
+                return re.findall(r"Interface\s+(\w+)", out)
+            elif system == "Darwin":
+                out = subprocess.check_output("networksetup -listallhardwareports", shell=True, encoding="utf-8")
+                return re.findall(r"Device: (.+)", out)
+        except:
+            return []
 
+    # ===== SCAN =====
+    def _start_scan(self):
         self.tree.delete(*self.tree.get_children())
+        self.detail.delete("1.0", tk.END)
+
         self.stop_event.clear()
-        self.btn_scan.config(state=tk.DISABLED)
-        self.btn_stop.config(state=tk.NORMAL)
         self.progress.start()
         self.status_var.set("Scanning...")
-        self.summary_var.set("Scanning...")
 
-        iface = self.iface_var.get() or None
+        interfaces = self._get_interfaces()
         demo = self.demo_var.get()
 
         self.scan_thread = threading.Thread(
             target=self._scan_worker,
-            args=(iface, demo, duration),
-            daemon=True,
+            args=(interfaces, demo),
+            daemon=True
         )
         self.scan_thread.start()
 
     def _stop_scan(self):
         self.stop_event.set()
-        self.status_var.set("Stopping...")
 
-    def _scan_worker(self, iface, demo, duration):
+    def _scan_worker(self, interfaces, demo):
         try:
-            scanner = WiFiScanner(iface=iface, demo=demo, stop_event=self.stop_event)
-            aps = scanner.scan(duration=duration)
-            
-            # If real scan found nothing and not in demo mode, try demo mode as fallback
-            if not demo and not aps:
-                print("[*] Real scan returned no results. Trying demo mode as fallback...")
-                self.status_var.set("No networks found. Using demo data...")
-                scanner_demo = WiFiScanner(iface=None, demo=True, stop_event=self.stop_event)
-                aps = scanner_demo.scan(duration=min(duration, 5))
-            
-            analyzer = APAnalyzer(aps)
-            report = analyzer.analyze()
-            self.result_queue.put(("done", report))
-        except Exception as exc:
-            self.result_queue.put(("error", str(exc)))
+            all_aps = []
 
+            if demo:
+                scanner = WiFiScanner(demo=True, stop_event=self.stop_event)
+                all_aps = scanner.scan(5)
+            else:
+                for iface in interfaces:
+                    if self.stop_event.is_set():
+                        break
+                    try:
+                        scanner = WiFiScanner(iface=iface, stop_event=self.stop_event)
+                        all_aps += scanner.scan(5)
+                    except:
+                        pass
+
+            if not all_aps:
+                scanner = WiFiScanner(demo=True, stop_event=self.stop_event)
+                all_aps = scanner.scan(5)
+
+            report = APAnalyzer(all_aps).analyze()
+            self.result_queue.put(("done", report))
+
+        except Exception as e:
+            self.result_queue.put(("error", str(e)))
+
+    # ===== UPDATE UI =====
     def _poll_queue(self):
         try:
-            msg_type, data = self.result_queue.get_nowait()
-            if msg_type == "done":
-                self._display_results(data)
-                self._finish_scan("Scan complete")
-            elif msg_type == "error":
-                self._finish_scan(f"Error: {data}")
+            msg, data = self.result_queue.get_nowait()
+            if msg == "done":
+                self._display(data)
+                self.progress.stop()
+                self.status_var.set("Done")
         except queue.Empty:
             pass
         self.root.after(100, self._poll_queue)
 
-    def _finish_scan(self, status: str):
-        self.progress.stop()
-        self.btn_scan.config(state=tk.NORMAL)
-        self.btn_stop.config(state=tk.DISABLED)
-        self.status_var.set(status)
-
-    def _display_results(self, report):
+    def _display(self, report):
         aps = report.get("aps", [])
-        
+
+        self.tree.tag_configure("high", background="#ff4444")
+        self.tree.tag_configure("sus", background="#ffcc00")
+        self.tree.tag_configure("safe", background="#44dd44")
+
         for row in aps:
-            score = row["score"]
-            level = row["level"]
-            tags = ()
-            if score >= RISK_HIGH:
-                tags = ("high",)
-            elif score >= RISK_SUSPICIOUS:
-                tags = ("suspicious",)
+            level = row.get("level", "").lower()
+
+            if "high" in level:
+                tag = "high"
+            elif "suspicious" in level:
+                tag = "sus"
             else:
-                tags = ("safe",)
+                tag = "safe"
+
+            flags_full = "; ".join(row.get("reasons", []))
 
             self.tree.insert(
                 "",
                 tk.END,
                 values=(
-                    row.get("ssid", ""),
-                    row.get("bssid", ""),
-                    row.get("vendor", ""),
-                    row.get("channel", ""),
-                    f"{row.get('rssi', '')} dBm",
-                    row.get("encryption", ""),
-                    score,
-                    level,
-                    "; ".join(row.get("reasons", [])) if row.get("reasons") else "-",
+                    row.get("ssid"),
+                    row.get("bssid"),
+                    row.get("vendor"),
+                    row.get("channel"),
+                    f"{row.get('rssi')} dBm",
+                    row.get("encryption"),
+                    row.get("score"),
+                    row.get("level"),
+                    flags_full  
                 ),
-                tags=tags,
+                tags=(tag,)
             )
 
-        # Configure tag colors
-        self.tree.tag_configure("high", background="#ff4444", foreground="white")
-        self.tree.tag_configure("suspicious", background="#ffcc00", foreground="black")
-        self.tree.tag_configure("safe", background="#44dd44", foreground="black")
+        self.summary_var.set(f"Summary: {len(aps)} APs")
 
-        # Update summary
-        total = report.get("total", len(aps))
-        high = sum(1 for r in aps if r["score"] >= RISK_HIGH)
-        susp = sum(1 for r in aps if RISK_SUSPICIOUS <= r["score"] < RISK_HIGH)
-        safe = sum(1 for r in aps if r["score"] < RISK_SUSPICIOUS)
-        self.summary_var.set(f"Summary: {high} High Risk | {susp} Suspicious | {safe} Safe | Total {total}")
+    # ===== SELECT ROW → SHOW FULL FLAGS =====
+    def _on_select(self, event):
+        selected = self.tree.selection()
+        if not selected:
+            return
+
+        item = self.tree.item(selected[0])
+        values = item["values"]
+
+        full_flags = values[8]
+
+        self.detail.delete("1.0", tk.END)
+        self.detail.insert(tk.END, full_flags)
 
 
 def launch_gui():
     root = tk.Tk()
-    app = WiFiAnalyzerGUI(root)
+    WiFiAnalyzerGUI(root)
     root.mainloop()
