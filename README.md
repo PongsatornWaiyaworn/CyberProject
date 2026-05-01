@@ -46,13 +46,13 @@ sudo python3 main.py -i wlan0mon -t 30
 sudo python3 main.py -i <iface> -t <seconds>
 ```
 
-| Argument | Description | Default |
-|----------|-------------|---------|
-| `-i, --iface` | Monitor-mode interface | auto |
-| `-t, --time` | Scan duration (seconds) | 30 |
-| `--no-team` | Skip team banner | false |
-| `--demo` | Use synthetic mock data (no Wi-Fi needed) | false |
-| `--gui` | Launch tkinter GUI mode | false |
+| Argument      | Description                               | Default |
+| ------------- | ----------------------------------------- | ------- |
+| `-i, --iface` | Monitor-mode interface                    | auto    |
+| `-t, --time`  | Scan duration (seconds)                   | 30      |
+| `--no-team`   | Skip team banner                          | false   |
+| `--demo`      | Use synthetic mock data (no Wi-Fi needed) | false   |
+| `--gui`       | Launch tkinter GUI mode                   | false   |
 
 ## How It Works
 
@@ -91,12 +91,10 @@ Launch a desktop GUI instead of the terminal UI:
 ```bash
 # Linux / macOS / Windows
 python main.py --gui
-
-# With demo data
-python main.py --gui --demo
 ```
 
 The GUI provides:
+
 - Input fields for **Interface** and **Duration**
 - **Demo mode** checkbox
 - **Start / Stop** scan buttons
@@ -123,6 +121,7 @@ sudo ./dist/wifi-risk-analyzer -i wlan0mon -t 30
 ```
 
 Manual build:
+
 ```bash
 pip3 install pyinstaller
 pyinstaller --onefile --name wifi-risk-analyzer --hidden-import wifi_analyzer.config --hidden-import wifi_analyzer.vendor_db --hidden-import wifi_analyzer.scanner --hidden-import wifi_analyzer.analyzer --hidden-import wifi_analyzer.ui --hidden-import wifi_analyzer.gui main.py
