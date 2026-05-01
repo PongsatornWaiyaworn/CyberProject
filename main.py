@@ -21,13 +21,23 @@ def main():
     parser.add_argument("-i", "--iface", default=None, help="Monitor-mode interface (e.g. wlan0mon)")
     parser.add_argument("-t", "--time", type=int, default=DEFAULT_SCAN_DURATION, help="Scan duration in seconds")
     parser.add_argument("--no-team", action="store_true", help="Skip team banner")
+    parser.add_argument("--demo", action="store_true", help="Use synthetic mock data instead of live scan")
+    parser.add_argument("--gui", action="store_true", help="Launch GUI mode (tkinter)")
     args = parser.parse_args()
+
+    if args.gui:
+        from wifi_analyzer.gui import launch_gui
+        launch_gui()
+        return
 
     print_banner()
     if not args.no_team:
         print_team()
 
-    scanner = WiFiScanner(iface=args.iface)
+    if args.demo:
+        print("[*] DEMO MODE: Using synthetic Wi-Fi data for testing.")
+
+    scanner = WiFiScanner(iface=args.iface, demo=args.demo)
     aps = scanner.scan(duration=args.time)
     analyzer = APAnalyzer(aps)
     report = analyzer.analyze()

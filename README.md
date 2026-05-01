@@ -19,9 +19,10 @@ Passive Wi-Fi scan, anomaly detection, and risk scoring based on MITRE ATT&CK **
 ## Requirements
 
 - Python 3.9+
-- Linux / Kali Linux (root access required)
-- Wi-Fi interface in **monitor mode** (`wlan0mon`)
-- `scapy` and `rich`
+- `rich`
+- **Linux / Kali**: `scapy` + Wi-Fi interface in **monitor mode** (`wlan0mon`)
+- **Windows**: No extra drivers needed (uses `netsh`); install [Npcap](https://npcap.com/#download) if you want scapy support
+- **macOS**: No extra drivers needed (uses `airport` utility)
 
 ## Installation (Kali Linux)
 
@@ -50,10 +51,16 @@ sudo python3 main.py -i <iface> -t <seconds>
 | `-i, --iface` | Monitor-mode interface | auto |
 | `-t, --time` | Scan duration (seconds) | 30 |
 | `--no-team` | Skip team banner | false |
+| `--demo` | Use synthetic mock data (no Wi-Fi needed) | false |
+| `--gui` | Launch tkinter GUI mode | false |
 
 ## How It Works
 
-1. **Scanner** (`scanner.py`) uses `scapy` to capture Beacon frames in real time.
+1. **Scanner** (`scanner.py`) auto-detects the OS and picks the best backend:
+   - **Linux / Kali**: `scapy` passive monitor-mode scan (best quality, requires root)
+   - **Windows**: `netsh wlan show networks` (no monitor mode needed)
+   - **macOS**: `airport -s` utility (no monitor mode needed)
+   - **`--demo`**: Synthetic mock data for testing without Wi-Fi hardware
 2. **Analyzer** (`analyzer.py`) groups APs by SSID and applies weighted heuristics:
    - SSID Duplicate across multiple BSSIDs → +25
    - Encryption mismatch → +20
@@ -62,6 +69,39 @@ sudo python3 main.py -i <iface> -t <seconds>
    - Non-standard channel → +10
    - Open network → +10
 3. **UI** (`ui.py`) renders the final report with risk levels and detailed flags.
+
+## Demo Mode (Test without Wi-Fi)
+
+Run anywhere without Wi-Fi adapter or monitor mode:
+
+```bash
+# Linux / macOS
+python3 main.py --demo
+
+# Windows
+python main.py --demo
+```
+
+This generates synthetic APs including Evil Twin, open networks, suspicious signals, and unknown vendors so you can test the analyzer and UI immediately.
+
+## GUI Mode (Tkinter)
+
+Launch a desktop GUI instead of the terminal UI:
+
+```bash
+# Linux / macOS / Windows
+python main.py --gui
+
+# With demo data
+python main.py --gui --demo
+```
+
+The GUI provides:
+- Input fields for **Interface** and **Duration**
+- **Demo mode** checkbox
+- **Start / Stop** scan buttons
+- Results table with color-coded risk levels (red = High Risk, yellow = Suspicious, green = Safe)
+- Summary bar showing totals
 
 ## Build as Standalone Executable
 
@@ -85,7 +125,7 @@ sudo ./dist/wifi-risk-analyzer -i wlan0mon -t 30
 Manual build:
 ```bash
 pip3 install pyinstaller
-pyinstaller --onefile --name wifi-risk-analyzer --hidden-import wifi_analyzer.config --hidden-import wifi_analyzer.vendor_db --hidden-import wifi_analyzer.scanner --hidden-import wifi_analyzer.analyzer --hidden-import wifi_analyzer.ui main.py
+pyinstaller --onefile --name wifi-risk-analyzer --hidden-import wifi_analyzer.config --hidden-import wifi_analyzer.vendor_db --hidden-import wifi_analyzer.scanner --hidden-import wifi_analyzer.analyzer --hidden-import wifi_analyzer.ui --hidden-import wifi_analyzer.gui main.py
 ```
 
 ---
@@ -101,7 +141,7 @@ chmod +x scripts/build_macos.sh
 sudo ./dist/wifi-risk-analyzer -i en0 -t 30
 ```
 
-**Note for macOS**: macOS Wi-Fi scanning requires root and a Wi-Fi adapter that supports monitor mode. You may need `libpcap` (`brew install libpcap`).
+**Note for macOS**: The `airport` utility works without monitor mode. If scapy fails, you may need `libpcap` (`brew install libpcap`).
 
 ---
 
@@ -113,11 +153,14 @@ Open PowerShell as **Administrator**:
 cd D:\Cyber\CyberProject
 .\scripts\build.ps1
 
-# Run (limited scanning on Windows without special drivers)
+# Run with live scan via netsh (no Npcap needed)
 .\dist\wifi-risk-analyzer.exe --no-team
+
+# Or run demo mode to test UI without Wi-Fi scan
+.\dist\wifi-risk-analyzer.exe --demo --no-team
 ```
 
-**Note for Windows**: You must install [Npcap](https://npcap.com/#download) first. Windows Wi-Fi monitor mode is very limited; for full functionality run the tool inside a Kali VM.
+**Note for Windows**: `netsh wlan show networks` works out of the box. Install [Npcap](https://npcap.com/#download) only if you want scapy-level packet capture. For full passive monitor mode, use Kali VM.
 
 ---
 
@@ -139,9 +182,10 @@ CyberProject/
 │   ├── __init__.py
 │   ├── config.py       # Constants, thresholds, weights
 │   ├── vendor_db.py    # Embedded OUI vendor lookup
-│   ├── scanner.py      # scapy passive Wi-Fi scanner
+│   ├── scanner.py      # Cross-platform Wi-Fi scanner
 │   ├── analyzer.py     # Anomaly detection & scoring engine
-│   └── ui.py           # Rich CLI output
+│   ├── ui.py           # Rich CLI output
+│   └── gui.py          # Tkinter desktop GUI
 ├── scripts/            # Build scripts
 │   ├── build.sh        # Linux / Kali build (PyInstaller)
 │   ├── build_macos.sh  # macOS build (PyInstaller)

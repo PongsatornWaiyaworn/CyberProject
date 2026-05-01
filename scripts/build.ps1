@@ -16,16 +16,16 @@ if (-not $py) {
 Write-Host "[*] Installing Python dependencies..." -ForegroundColor Green
 python -m pip install -r requirements.txt
 
-# Check/Install PyInstaller
+# Install PyInstaller if not present
 Write-Host "[*] Checking PyInstaller..." -ForegroundColor Green
-$pi = Get-Command pyinstaller -ErrorAction SilentlyContinue
-if (-not $pi) {
+python -m pip show pyinstaller | Out-Null
+if ($LASTEXITCODE -ne 0) {
     Write-Host "[*] Installing PyInstaller..." -ForegroundColor Yellow
     python -m pip install pyinstaller
 }
 
 Write-Host "[*] Building standalone executable..." -ForegroundColor Green
-pyinstaller `
+python -m PyInstaller `
     --onefile `
     --name wifi-risk-analyzer `
     --hidden-import wifi_analyzer.config `
@@ -33,6 +33,7 @@ pyinstaller `
     --hidden-import wifi_analyzer.scanner `
     --hidden-import wifi_analyzer.analyzer `
     --hidden-import wifi_analyzer.ui `
+    --hidden-import wifi_analyzer.gui `
     main.py
 
 if ($LASTEXITCODE -eq 0) {

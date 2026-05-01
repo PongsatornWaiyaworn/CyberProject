@@ -20,14 +20,14 @@ echo "[*] Installing Python dependencies..."
 pip3 install -r requirements.txt
 
 # Install PyInstaller if not present
-if ! command -v pyinstaller &> /dev/null; then
+if ! python3 -m pip show pyinstaller &> /dev/null; then
     echo "[*] Installing PyInstaller..."
     pip3 install pyinstaller
 fi
 
 # Build single executable
 echo "[*] Building standalone executable with PyInstaller..."
-pyinstaller \
+python3 -m PyInstaller \
     --onefile \
     --name wifi-risk-analyzer \
     --hidden-import wifi_analyzer.config \
@@ -35,6 +35,7 @@ pyinstaller \
     --hidden-import wifi_analyzer.scanner \
     --hidden-import wifi_analyzer.analyzer \
     --hidden-import wifi_analyzer.ui \
+    --hidden-import wifi_analyzer.gui \
     main.py
 
 echo "[*] Build complete!"
