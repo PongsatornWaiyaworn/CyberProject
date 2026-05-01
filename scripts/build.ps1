@@ -24,21 +24,24 @@ if ($LASTEXITCODE -ne 0) {
     python -m pip install pyinstaller
 }
 
-Write-Host "[*] Building standalone executable..." -ForegroundColor Green
+Write-Host "[*] Building GUI executable..." -ForegroundColor Green
 python -m PyInstaller `
     --onefile `
-    --name wifi-risk-analyzer `
+    --windowed `
+    --name wifi-risk-analyzer-gui `
     --hidden-import wifi_analyzer.config `
     --hidden-import wifi_analyzer.vendor_db `
     --hidden-import wifi_analyzer.scanner `
     --hidden-import wifi_analyzer.analyzer `
     --hidden-import wifi_analyzer.ui `
     --hidden-import wifi_analyzer.gui `
-    main.py
+    gui_main.py
+
+
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "[*] Build complete!" -ForegroundColor Green
-    Write-Host "[*] Executable location: dist\wifi-risk-analyzer.exe" -ForegroundColor Green
+    Write-Host "[*] Executable location: dist\wifi-risk-analyzer-gui.exe" -ForegroundColor Green
     Write-Host ""
     Write-Host "[*] IMPORTANT NOTES FOR WINDOWS:" -ForegroundColor Yellow
     Write-Host "    - scapy on Windows requires Npcap (https://npcap.com/#download)" -ForegroundColor Yellow
@@ -46,7 +49,7 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "    - For full Wi-Fi scanning capability, run the tool on Linux/Kali." -ForegroundColor Yellow
     Write-Host ""
     Write-Host "[*] Usage (limited on Windows):" -ForegroundColor Cyan
-    Write-Host "    dist\wifi-risk-analyzer.exe --no-team" -ForegroundColor White
+    Write-Host "    dist\wifi-risk-analyzer-gui.exe" -ForegroundColor White
 } else {
     Write-Host "[!] Build failed." -ForegroundColor Red
 }

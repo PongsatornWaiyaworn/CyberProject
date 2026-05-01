@@ -107,6 +107,8 @@ You can build a single-file binary on **Linux / macOS / Windows**. The binary bu
 
 > **Recommendation**: Wi-Fi monitor mode works best on Linux/Kali. Windows and macOS builds are supported but may have limited scanning capability due to OS driver restrictions.
 
+> **Pre-built Binaries**: This project uses GitHub Actions to automatically build executables for Windows, macOS, and Linux. You can download the latest builds from the **Actions** tab in this repository.
+
 ---
 
 ### Linux / Kali (Recommended)
@@ -116,7 +118,10 @@ cd /path/to/CyberProject
 chmod +x scripts/build.sh
 ./scripts/build.sh
 
-# Run
+# Run GUI version
+sudo ./dist/wifi-risk-analyzer-gui
+
+# Or run CLI version
 sudo ./dist/wifi-risk-analyzer -i wlan0mon -t 30
 ```
 
@@ -124,7 +129,7 @@ Manual build:
 
 ```bash
 pip3 install pyinstaller
-pyinstaller --onefile --name wifi-risk-analyzer --hidden-import wifi_analyzer.config --hidden-import wifi_analyzer.vendor_db --hidden-import wifi_analyzer.scanner --hidden-import wifi_analyzer.analyzer --hidden-import wifi_analyzer.ui --hidden-import wifi_analyzer.gui main.py
+pyinstaller --onefile --windowed --name wifi-risk-analyzer-gui --hidden-import wifi_analyzer.config --hidden-import wifi_analyzer.vendor_db --hidden-import wifi_analyzer.scanner --hidden-import wifi_analyzer.analyzer --hidden-import wifi_analyzer.ui --hidden-import wifi_analyzer.gui wifi_analyzer/gui.py
 ```
 
 ---
@@ -136,7 +141,10 @@ cd /path/to/CyberProject
 chmod +x scripts/build_macos.sh
 ./scripts/build_macos.sh
 
-# Run (requires root + monitor mode capable adapter)
+# Run GUI version (requires root + monitor mode capable adapter)
+sudo ./dist/wifi-risk-analyzer-gui
+
+# Or run CLI version
 sudo ./dist/wifi-risk-analyzer -i en0 -t 30
 ```
 
@@ -152,10 +160,13 @@ Open PowerShell as **Administrator**:
 cd D:\Cyber\CyberProject
 .\scripts\build.ps1
 
-# Run with live scan via netsh (no Npcap needed)
+# Run the GUI application
+.\dist\wifi-risk-analyzer-gui.exe
+
+# Or run the CLI application with live scan via netsh
 .\dist\wifi-risk-analyzer.exe --no-team
 
-# Or run demo mode to test UI without Wi-Fi scan
+# Or run CLI in demo mode to test without Wi-Fi scan
 .\dist\wifi-risk-analyzer.exe --demo --no-team
 ```
 
@@ -169,8 +180,9 @@ The produced binary is self-contained (except for `libpcap` / `Npcap` on the tar
 
 ```bash
 # Linux / macOS
-scp dist/wifi-risk-analyzer kali@vm:/home/kali/
-ssh kali@vm "sudo /home/kali/wifi-risk-analyzer -i wlan0mon -t 30"
+scp dist/wifi-risk-analyzer-gui dist/wifi-risk-analyzer kali@vm:/home/kali/
+ssh kali@vm "sudo /home/kali/wifi-risk-analyzer-gui"
+# Or: ssh kali@vm "sudo /home/kali/wifi-risk-analyzer -i wlan0mon -t 30"
 ```
 
 ## Project Structure

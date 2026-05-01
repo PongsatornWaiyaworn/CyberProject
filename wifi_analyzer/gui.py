@@ -287,3 +287,6 @@ def launch_gui():
     root = tk.Tk()
     WiFiAnalyzerGUI(root)
     root.mainloop()
+
+if __name__ == "__main__":
+    launch_gui()
