@@ -1,6 +1,6 @@
 # Fake Wi-Fi Risk Analyzer (Evil Twin Detector)
 
-ระบบวิเคราะห์ความเสี่ยง Wi-Fi ปลอมจากความผิดปกติของ Access Point  
+Fake Wi-Fi Risk Analyzer Based on Access Point Anomaly Detection | ระบบวิเคราะห์ความเสี่ยง Wi-Fi ปลอมจากความผิดปกติของ Access Point 
 Passive Wi-Fi scan, anomaly detection, and risk scoring based on MITRE ATT&CK **T1557.004**.
 
 ## Features
