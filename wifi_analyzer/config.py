@@ -8,7 +8,7 @@ DEFAULT_INTERFACE = None    # auto-detect if None
 
 # Risk scoring thresholds
 RISK_SAFE = 30
-RISK_SUSPICIOUS = 70
+RISK_SUSPICIOUS = 60
 RISK_HIGH = 100
 
 # RSSI anomaly thresholds
