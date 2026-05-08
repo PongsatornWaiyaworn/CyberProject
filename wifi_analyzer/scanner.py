@@ -34,8 +34,12 @@ class WiFiScanner:
         if self.demo:
             return self._demo_scan(duration)
 
-        if _SYSTEM == "linux" and SCAPY_AVAILABLE:
-            return self._scapy_scan(duration)
+        if _SYSTEM == "linux":
+            import os
+            if SCAPY_AVAILABLE and hasattr(os, "geteuid") and os.geteuid() == 0:
+                return self._scapy_scan(duration)
+            else:
+                return self._linux_nmcli_scan(duration)
         elif _SYSTEM == "darwin":
             return self._macos_scan(duration)
         elif _SYSTEM == "windows":
@@ -171,6 +175,77 @@ class WiFiScanner:
         t.join(timeout=2)
         print(f"[*] Scapy scan complete. Found {len(self.results)} unique APs.")
         return self.results
+
+    # ------------------------------------------------------------------
+    # Linux — nmcli (active scan fallback, no monitor mode/root needed)
+    # ------------------------------------------------------------------
+    def _linux_nmcli_scan(self, duration: int) -> Dict[str, Dict[str, Any]]:
+        print(f"[*] Starting Linux active scan via nmcli for {duration}s...")
+        end = time.time() + duration
+        while time.time() < end and not self._stop.is_set():
+            try:
+                subprocess.run(["nmcli", "dev", "wifi", "rescan"], stderr=subprocess.DEVNULL)
+                out = subprocess.check_output(
+                    ["nmcli", "-t", "-f", "BSSID,SSID,SIGNAL,CHAN,SECURITY", "dev", "wifi", "list"],
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    errors="ignore",
+                )
+                self._parse_nmcli(out)
+            except Exception as e:
+                print(f"[!] nmcli scan error: {e}")
+                break
+            
+            sleep_end = time.time() + 5
+            while time.time() < sleep_end and not self._stop.is_set():
+                time.sleep(0.1)
+        
+        print(f"[*] nmcli scan complete. Found {len(self.results)} unique APs.")
+        return self.results
+
+    def _parse_nmcli(self, output: str):
+        for line in output.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.replace("\\:", "-").split(":")
+            if len(parts) >= 5:
+                bssid = parts[0].replace("-", ":").upper()
+                ssid = parts[1].replace("-", ":")
+                try:
+                    rssi_val = int(parts[2])
+                    rssi = -100 + int(rssi_val * 0.7)
+                except ValueError:
+                    rssi = -70
+                try:
+                    channel = int(parts[3])
+                except ValueError:
+                    channel = 0
+                sec = parts[4].upper()
+                
+                if "WPA3" in sec or "WPA2" in sec:
+                    enc = "WPA2/WPA3"
+                elif "WPA" in sec:
+                    enc = "WPA"
+                elif "WEP" in sec:
+                    enc = "WEP"
+                else:
+                    enc = "OPN"
+
+                key = bssid
+                if key not in self.results:
+                    self.results[key] = {
+                        "bssid": bssid,
+                        "ssid": ssid,
+                        "rssi": rssi,
+                        "channel": channel,
+                        "encryption": enc,
+                        "count": 1,
+                    }
+                else:
+                    self.results[key]["count"] += 1
+                    if rssi > self.results[key]["rssi"]:
+                        self.results[key]["rssi"] = rssi
 
     # ------------------------------------------------------------------
     # Windows — netsh wlan show networks mode=Bssid (no monitor mode needed)

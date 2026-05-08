@@ -4,10 +4,8 @@ import argparse
 import sys
 import os
 
-if hasattr(os, "geteuid") and os.geteuid() != 0:
-    print("[!] This tool must run as root (required for monitor mode & raw 802.11 capture).")
-    print("    Example: sudo python3 main.py -i wlan0mon -t 30")
-    sys.exit(1)
+if hasattr(os, "geteuid") and os.geteuid() != 0 and "--demo" not in sys.argv:
+    print("[*] Note: Running without root. Will use active Wi-Fi scanning (nmcli) instead of passive monitor mode.")
 
 from wifi_analyzer.scanner import WiFiScanner
 from wifi_analyzer.analyzer import APAnalyzer
