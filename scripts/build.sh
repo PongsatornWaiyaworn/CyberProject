@@ -1,5 +1,4 @@
-#!/bin/bash
-# Build script for Kali Linux / Debian-based systems
+# Build script for Linux
 # Creates a standalone executable using PyInstaller
 
 set -e

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Fake Wi-Fi Risk Analyzer - Main Entry Point."""
 import argparse
 import sys

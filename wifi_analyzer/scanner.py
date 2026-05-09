@@ -24,9 +24,6 @@ class WiFiScanner:
         self.results: Dict[str, Dict[str, Any]] = {}
         self._stop = stop_event if stop_event is not None else threading.Event()
 
-    # ------------------------------------------------------------------
-    # Public entry point
-    # ------------------------------------------------------------------
     def scan(self, duration: int = 30) -> Dict[str, Dict[str, Any]]:
         self.results.clear()
         self._stop.clear()
@@ -48,9 +45,7 @@ class WiFiScanner:
             print(f"[!] Unsupported platform '{platform.system()}'. Using demo mode.")
             return self._demo_scan(duration)
 
-    # ------------------------------------------------------------------
     # Demo / mock data (testing without Wi-Fi hardware)
-    # ------------------------------------------------------------------
     def _demo_scan(self, duration: int) -> Dict[str, Dict[str, Any]]:
         print(f"[*] DEMO MODE: Generating mock Wi-Fi data...")
         # Sleep with periodic stop checks
@@ -79,9 +74,6 @@ class WiFiScanner:
         print(f"[*] DEMO scan complete. Found {len(self.results)} mock APs.")
         return self.results
 
-    # ------------------------------------------------------------------
-    # Linux / Kali — scapy passive monitor-mode scan (best quality)
-    # ------------------------------------------------------------------
     @staticmethod
     def _get_encryption(pkt) -> str:
         cap = pkt[Dot11Beacon].cap
@@ -176,9 +168,6 @@ class WiFiScanner:
         print(f"[*] Scapy scan complete. Found {len(self.results)} unique APs.")
         return self.results
 
-    # ------------------------------------------------------------------
-    # Linux — nmcli (active scan fallback, no monitor mode/root needed)
-    # ------------------------------------------------------------------
     def _linux_nmcli_scan(self, duration: int) -> Dict[str, Dict[str, Any]]:
         print(f"[*] Starting Linux active scan via nmcli for {duration}s...")
         end = time.time() + duration
@@ -247,9 +236,6 @@ class WiFiScanner:
                     if rssi > self.results[key]["rssi"]:
                         self.results[key]["rssi"] = rssi
 
-    # ------------------------------------------------------------------
-    # Windows — netsh wlan show networks mode=Bssid (no monitor mode needed)
-    # ------------------------------------------------------------------
     def _windows_scan(self, duration: int) -> Dict[str, Dict[str, Any]]:
         print(f"[*] Starting Windows scan via netsh for {duration}s...")
         seen = set()
@@ -324,9 +310,6 @@ class WiFiScanner:
                     else:
                         self.results[bssid]["encryption"] = "OPN"
 
-    # ------------------------------------------------------------------
-    # macOS — airport utility (no monitor mode needed)
-    # ------------------------------------------------------------------
     def _macos_scan(self, duration: int) -> Dict[str, Dict[str, Any]]:
         print(f"[*] Starting macOS scan for {duration}s...")
         end = time.time() + duration

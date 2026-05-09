@@ -1,4 +1,3 @@
-#!/bin/bash
 # Build script for macOS
 # Creates a standalone executable using PyInstaller
 
